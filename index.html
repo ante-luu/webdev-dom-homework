@@ -65,7 +65,56 @@
 
   <script>
     "use strict";
-    // Код писать здесь
-    console.log("It works!");
+    
+    // Находим список комментариев
+    const commentsList = document.querySelector('.comments');
+    
+    // Обработчик события на изменения полей ввода "Имя" и "Комментарий"
+    const nameInput = document.querySelector('.add-form-name');
+    const commentInput = document.querySelector('.add-form-text');
+    
+    // Обработчик события на нажатие кнопки "Написать"
+    document.querySelector('.add-form-button').addEventListener('click', () => {
+      const name = nameInput.value;
+      const text = commentInput.value;
+      
+      // Валидация: нельзя добавить комментарий, не указав имени или текста
+      if (!name.trim() || !text.trim()) {
+        alert('Пожалуйста, заполните все поля!');
+        return;
+      }
+      
+      // Создаем шаблонную строку комментария с помощью обратных кавычек
+      const currentDate = new Date();
+      const formattedDate = currentDate.toLocaleDateString('ru-RU') + ' ' + 
+                           currentDate.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+      
+      const newCommentHTML = `
+        <li class="comment">
+          <div class="comment-header">
+            <div>${name}</div>
+            <div>${formattedDate}</div>
+          </div>
+          <div class="comment-body">
+            <div class="comment-text">
+              ${text}
+            </div>
+          </div>
+          <div class="comment-footer">
+            <div class="likes">
+              <span class="likes-counter">0</span>
+              <button class="like-button"></button>
+            </div>
+          </div>
+        </li>
+      `;
+      
+      // С помощью свойства innerHTML добавляем новый комментарий
+      commentsList.innerHTML += newCommentHTML;
+      
+      // Очищаем форму
+      nameInput.value = '';
+      commentInput.value = '';
+    });
   </script>
 </html>
