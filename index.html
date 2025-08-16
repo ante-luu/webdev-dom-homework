@@ -57,7 +57,7 @@
           rows="4"
         ></textarea>
         <div class="add-form-row">
-          <button class="add-form-button">Добавить</button>
+          <button class="add-form-button">Написать</button>
         </div>
       </div>
     </div>
@@ -66,61 +66,82 @@
   <script>
     "use strict";
     
-    // Находим список комментариев
-    const commentsList = document.querySelector('.comments');
-    
-    // Обработчик события на изменения полей ввода "Имя" и "Комментарий"
-    const nameInput = document.querySelector('.add-form-name');
-    const commentInput = document.querySelector('.add-form-text');
-    
-    // Обработчик события на нажатие кнопки "Добавить"
-    document.querySelector('.add-form-button').addEventListener('click', () => {
-      const name = nameInput.value;
-      const text = commentInput.value;
+    // Функция для создания комментария
+    function createComment(name, text, date) {
+      const comment = document.createElement('li');
+      comment.className = 'comment';
       
-      // Валидация: нельзя добавить комментарий, не указав имени или текста
+      const currentDate = date || new Date();
+      const formattedDate = currentDate.toLocaleDateString('ru-RU') + ' ' + 
+                           currentDate.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+      
+      comment.innerHTML = `
+        <div class="comment-header">
+          <div>${name}</div>
+          <div>${formattedDate}</div>
+        </div>
+        <div class="comment-body">
+          <div class="comment-text">
+            ${text}
+          </div>
+        </div>
+        <div class="comment-footer">
+          <div class="likes">
+            <span class="likes-counter">0</span>
+            <button class="like-button"></button>
+          </div>
+        </div>
+      `;
+      
+      // Добавляем обработчик для лайка
+      const likeButton = comment.querySelector('.like-button');
+      const likesCounter = comment.querySelector('.likes-counter');
+      let isLiked = false;
+      
+      likeButton.addEventListener('click', () => {
+        if (isLiked) {
+          likesCounter.textContent = parseInt(likesCounter.textContent) - 1;
+          likeButton.classList.remove('-active-like');
+          isLiked = false;
+        } else {
+          likesCounter.textContent = parseInt(likesCounter.textContent) + 1;
+          likeButton.classList.add('-active-like');
+          isLiked = true;
+        }
+      });
+      
+      return comment;
+    }
+    
+    // Функция для добавления комментария
+    function addComment(name, text) {
       if (!name.trim() || !text.trim()) {
         alert('Пожалуйста, заполните все поля!');
         return;
       }
       
-      // Создаем шаблонную строку комментария с помощью обратных кавычек
-      const currentDate = new Date();
-      const formattedDate = currentDate.toLocaleDateString('ru-RU') + ' ' + 
-                           currentDate.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
-      
-      const newCommentHTML = `
-        <li class="comment">
-          <div class="comment-header">
-            <div>${name}</div>
-            <div>${formattedDate}</div>
-          </div>
-          <div class="comment-body">
-            <div class="comment-text">
-              ${text}
-            </div>
-          </div>
-          <div class="comment-footer">
-            <div class="likes">
-              <span class="likes-counter">0</span>
-              <button class="like-button"></button>
-            </div>
-          </div>
-        </li>
-      `;
-      
-      // С помощью свойства innerHTML добавляем новый комментарий
-      commentsList.innerHTML += newCommentHTML;
+      const commentsList = document.querySelector('.comments');
+      const newComment = createComment(name, text);
+      commentsList.appendChild(newComment);
       
       // Очищаем форму
-      nameInput.value = '';
-      commentInput.value = '';
+      document.querySelector('.add-form-name').value = '';
+      document.querySelector('.add-form-text').value = '';
+    }
+    
+    // Обработчик для кнопки "Написать"
+    document.querySelector('.add-form-button').addEventListener('click', () => {
+      const name = document.querySelector('.add-form-name').value;
+      const text = document.querySelector('.add-form-text').value;
+      addComment(name, text);
     });
     
     // Обработчик для Enter в текстовом поле
-    commentInput.addEventListener('keydown', (e) => {
+    document.querySelector('.add-form-text').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.ctrlKey) {
-        document.querySelector('.add-form-button').click();
+        const name = document.querySelector('.add-form-name').value;
+        const text = document.querySelector('.add-form-text').value;
+        addComment(name, text);
       }
     });
     
