@@ -92,6 +92,8 @@
       comments.forEach((comment, index) => {
         const commentElement = document.createElement('li');
         commentElement.className = 'comment';
+        // Храним индекс комментария для обработчика клика по комментарию (цитирование)
+        commentElement.dataset.index = String(index);
         
         // Определяем класс для иконки лайка на основе булевого значения
         const likeButtonClass = comment.isLiked ? 'like-button -active-like' : 'like-button';
@@ -117,8 +119,9 @@
         commentsList.appendChild(commentElement);
       });
       
-      // Добавляем обработчики для кнопок лайков
+      // Добавляем обработчики для кнопок лайков и клика по самому комментарию
       addLikeHandlers();
+      addReplyHandlers();
     }
     
     // Функция добавления обработчиков для лайков
@@ -126,7 +129,9 @@
       const likeButtons = document.querySelectorAll('.like-button');
       
       likeButtons.forEach((button) => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', (e) => {
+          // Клик по лайку не должен вызывать цитирование комментария
+          e.stopPropagation();
           const index = parseInt(button.dataset.index);
           const comment = comments[index];
           
@@ -145,6 +150,32 @@
         });
       });
     }
+
+    // Обработчики клика по комментарию для цитирования в форму
+    function addReplyHandlers() {
+      const commentItems = document.querySelectorAll('.comment');
+      const nameInput = document.querySelector('.add-form-name');
+      const textInput = document.querySelector('.add-form-text');
+      
+      commentItems.forEach((item) => {
+        item.addEventListener('click', (e) => {
+          // Если клик пришёл с иконки лайка – ничего не делаем
+          const target = e.target;
+          if (target && target.closest && target.closest('.like-button')) {
+            return;
+          }
+          const idxStr = item.dataset.index || '-1';
+          const index = parseInt(idxStr);
+          if (Number.isNaN(index) || index < 0 || index >= comments.length) return;
+          const original = comments[index];
+          // Подставляем в поле комментария цитату и имя автора
+          const quotedText = `> ${original.text}`;
+          textInput.value = `${quotedText}\n${original.name}, `;
+          // Опционально: если имя пустое в поле имени – можно подсказать текущее введённое
+          nameInput.focus();
+        });
+      });
+    }
     
     // Функция добавления нового комментария
     function addComment(name, text) {
@@ -153,15 +184,27 @@
         return;
       }
       
+      // Обработка HTML-разметки: экранируем опасные символы
+      const sanitize = (value) => {
+        return value
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      };
+      const safeName = sanitize(name.trim());
+      const safeText = sanitize(text.trim());
+
       const currentDate = new Date();
       const formattedDate = currentDate.toLocaleDateString('ru-RU') + ' ' + 
                            currentDate.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
       
       // Добавляем новый комментарий в массив
       const newComment = {
-        name: name,
+        name: safeName,
         date: formattedDate,
-        text: text,
+        text: safeText,
         likes: 0,
         isLiked: false
       };
