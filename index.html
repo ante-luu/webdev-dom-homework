@@ -1,20 +1,345 @@
+<!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>api 1</title>
-        <link rel="stylesheet" href="styles.css" />
-    </head>
+  <head>
+    <title>Проект "Комменты"</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
 
-    <body>
-        <h1>Список задач</h1>
-        <ul id="list"></ul>
-        <div>
-            <h3>Форма добавления</h3>
-            Что нужно сделать:
-            <input type="text" id="field" />
-            <br /><br />
-            <button type="button" id="add">Добавить</button>
+  <body>
+    <div class="container">
+      <ul class="comments">
+        <!-- Комментарии будут загружены динамически из API -->
+      </ul>
+      <div class="add-form">
+        <input
+          type="text"
+          class="add-form-name"
+          placeholder="Введите ваше имя"
+        />
+        <textarea
+          type="textarea"
+          class="add-form-text"
+          placeholder="Введите ваш коментарий"
+          rows="4"
+        ></textarea>
+        <div class="add-form-row">
+          <button class="add-form-button">Написать</button>
         </div>
-        <script type="module" src="./index.js"></script>
-    </body>
+      </div>
+    </div>
+  </body>
+
+  <script>
+    "use strict";
+    
+    // Базовый URL API
+    const API_BASE_URL = 'https://wedev-api.sky.pro/api/v1';
+    const API_KEY = 'valeriya-kozik'; 
+    
+    // Массив с данными комментариев
+    let comments = [];
+    
+    // Функции для работы с API
+    async function fetchComments() {
+      try {
+        console.log('Загружаем комментарии с URL:', `${API_BASE_URL}/${API_KEY}/comments`);
+        
+        const response = await fetch(`${API_BASE_URL}/${API_KEY}/comments`, {
+          method: 'GET',
+        });
+        
+        console.log('Ответ сервера:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Ошибка сервера:', errorText);
+          throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Полученные данные:', data);
+        return data.comments; // API возвращает { "comments": [...] }
+      } catch (error) {
+        console.error('Ошибка при загрузке комментариев:', error);
+        throw error;
+      }
+    }
+    
+    async function postComment(commentData) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/${API_KEY}/comments`, {
+          method: 'POST',
+          body: JSON.stringify(commentData),
+        });
+        
+        if (!response.ok) {
+          // Обрабатываем ошибки валидации (400)
+          if (response.status === 400) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Ошибка валидации');
+          }
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data; // API возвращает { "result": "ok" }
+      } catch (error) {
+        console.error('Ошибка при добавлении комментария:', error);
+        throw error;
+      }
+    }
+    
+    // Функции для работы с localStorage (лайки)
+    function saveLikesToStorage() {
+      const likesData = {};
+      comments.forEach((comment, index) => {
+        if (comment.isLiked) {
+          likesData[comment.id || index] = true;
+        }
+      });
+      localStorage.setItem('commentLikes', JSON.stringify(likesData));
+    }
+    
+    function loadLikesFromStorage() {
+      const likesData = localStorage.getItem('commentLikes');
+      if (likesData) {
+        try {
+          return JSON.parse(likesData);
+        } catch (error) {
+          console.error('Ошибка при загрузке лайков:', error);
+          return {};
+        }
+      }
+      return {};
+    }
+    
+    function applyLikesFromStorage() {
+      const likesData = loadLikesFromStorage();
+      comments.forEach((comment, index) => {
+        const commentId = comment.id || index;
+        if (likesData[commentId]) {
+          comment.isLiked = true;
+        } else {
+          comment.isLiked = false;
+        }
+      });
+    }
+    
+    // Функция рендера комментариев
+    function renderComments() {
+      const commentsList = document.querySelector('.comments');
+      commentsList.innerHTML = '';
+      
+      comments.forEach((comment, index) => {
+        const commentElement = document.createElement('li');
+        commentElement.className = 'comment';
+        // Храним индекс для обработчика ответа
+        commentElement.dataset.index = String(index);
+        
+        // Определяем класс для иконки лайка на основе булевого значения
+        const likeButtonClass = comment.isLiked ? 'like-button -active-like' : 'like-button';
+        
+        // Форматируем дату для отображения
+        const formattedDate = formatDate(comment.date);
+        
+        commentElement.innerHTML = `
+          <div class="comment-header">
+            <div>${comment.author?.name || comment.name || 'Аноним'}</div>
+            <div>${formattedDate}</div>
+          </div>
+          <div class="comment-body">
+            <div class="comment-text">
+              ${comment.text}
+            </div>
+          </div>
+          <div class="comment-footer">
+            <div class="likes">
+              <span class="likes-counter">${getDisplayLikes(comment)}</span>
+              <button class="${likeButtonClass}" data-index="${index}"></button>
+            </div>
+          </div>
+        `;
+        
+        commentsList.appendChild(commentElement);
+      });
+      
+      // Добавляем обработчики для кнопок лайков и клики по карточкам
+      addLikeHandlers();
+      addReplyHandlers();
+    }
+    
+    // Функция форматирования даты
+    function formatDate(dateString) {
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU') + ' ' + 
+               date.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+      } catch (error) {
+        return dateString; // Возвращаем исходную строку, если не удалось распарсить
+      }
+    }
+    
+    // Функция для получения отображаемого количества лайков
+    function getDisplayLikes(comment) {
+      const baseLikes = comment.likes || 0;
+      return comment.isLiked ? baseLikes + 1 : baseLikes;
+    }
+    
+    // Функция добавления обработчиков для лайков
+    function addLikeHandlers() {
+      const likeButtons = document.querySelectorAll('.like-button');
+      
+      likeButtons.forEach((button) => {
+        button.addEventListener('click', (e) => {
+          // Клик по лайку не должен вызывать цитирование
+          e.stopPropagation();
+          const index = parseInt(button.dataset.index);
+          const comment = comments[index];
+          
+          if (comment.isLiked) {
+            // Убираем лайк
+            comment.isLiked = false;
+          } else {
+            // Ставим лайк
+            comment.isLiked = true;
+          }
+          
+          // Сохраняем состояние лайков в localStorage
+          saveLikesToStorage();
+          
+          // Перерисовываем все комментарии
+          renderComments();
+        });
+      });
+    }
+
+    // Обработчики ответа: клик по карточке -> подставить цитату и имя
+    function addReplyHandlers() {
+      const commentItems = document.querySelectorAll('.comment');
+      const nameInput = document.querySelector('.add-form-name');
+      const textInput = document.querySelector('.add-form-text');
+      
+      commentItems.forEach((item) => {
+        item.addEventListener('click', (e) => {
+          // Не реагируем, если клик пришёл с лайка
+          const target = e.target;
+          if (target && target.closest && target.closest('.like-button')) {
+            return;
+          }
+          const idxStr = item.dataset.index || '-1';
+          const index = parseInt(idxStr);
+          if (Number.isNaN(index) || index < 0 || index >= comments.length) return;
+          const original = comments[index];
+          const quotedText = `> ${original.text}`;
+          textInput.value = `${quotedText}\n${original.name}, `;
+          nameInput.focus();
+        });
+      });
+    }
+    
+    // Функция добавления нового комментария
+    async function addComment(name, text) {
+      if (!name.trim() || !text.trim()) {
+        alert('Пожалуйста, заполните все поля!');
+        return;
+      }
+      
+      // Валидация длины (минимум 3 символа согласно API)
+      if (name.trim().length < 3) {
+        alert('Имя должно содержать хотя бы 3 символа');
+        return;
+      }
+      
+      if (text.trim().length < 3) {
+        alert('Текст комментария должен содержать хотя бы 3 символа');
+        return;
+      }
+      
+      // Экранируем HTML, чтобы разметка отображалась как текст
+      const sanitize = (value) => {
+        return value
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      };
+      const safeName = sanitize(name.trim());
+      const safeText = sanitize(text.trim());
+      
+      try {
+        // Отправляем комментарий на сервер
+        const commentData = {
+        text: safeText,
+          name: safeName
+      };
+      
+        const response = await postComment(commentData);
+      
+        // После успешного добавления перезагружаем комментарии с сервера
+        // чтобы получить актуальный список с правильными ID и датами
+        await loadComments();
+      
+      // Очищаем форму
+      document.querySelector('.add-form-name').value = '';
+      document.querySelector('.add-form-text').value = '';
+        
+      } catch (error) {
+        console.error('Ошибка при добавлении комментария:', error);
+        alert(error.message || 'Произошла ошибка при добавлении комментария. Попробуйте еще раз.');
+      }
+    }
+    
+    // Функция загрузки комментариев при инициализации
+    async function loadComments() {
+      try {
+        const apiComments = await fetchComments();
+        comments = apiComments;
+        
+        // Применяем сохраненные лайки
+        applyLikesFromStorage();
+        
+        // Перерисовываем комментарии
+        renderComments();
+      } catch (error) {
+        console.error('Ошибка при загрузке комментариев:', error);
+        // Показываем сообщение об ошибке пользователю
+        const commentsList = document.querySelector('.comments');
+        let errorMessage = 'Ошибка загрузки комментариев. Проверьте подключение к интернету.';
+        
+        // Более детальное сообщение об ошибке
+        if (error.message.includes('CORS')) {
+          errorMessage = 'Ошибка CORS. Откройте файл через локальный сервер (например, Live Server в VS Code).';
+        } else if (error.message.includes('404')) {
+          errorMessage = 'API ключ не найден. Проверьте правильность personal-key.';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Не удается подключиться к серверу. Проверьте интернет-соединение.';
+        }
+        
+        commentsList.innerHTML = `<li class="comment"><div class="comment-text">${errorMessage}</div></li>`;
+      }
+    }
+    
+    // Обработчик для кнопки "Написать"
+    document.querySelector('.add-form-button').addEventListener('click', () => {
+      const name = document.querySelector('.add-form-name').value;
+      const text = document.querySelector('.add-form-text').value;
+      addComment(name, text);
+    });
+    
+    // Обработчик для Enter в текстовом поле
+    document.querySelector('.add-form-text').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        const name = document.querySelector('.add-form-name').value;
+        const text = document.querySelector('.add-form-text').value;
+        addComment(name, text);
+      }
+    });
+    
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+      loadComments();
+    });
+  </script>
 </html>
