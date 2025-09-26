@@ -90,41 +90,7 @@
       }
     }
     
-    // Функции для работы с localStorage (лайки)
-    function saveLikesToStorage() {
-      const likesData = {};
-      comments.forEach((comment, index) => {
-        if (comment.isLiked) {
-          likesData[comment.id || index] = true;
-        }
-      });
-      localStorage.setItem('commentLikes', JSON.stringify(likesData));
-    }
-    
-    function loadLikesFromStorage() {
-      const likesData = localStorage.getItem('commentLikes');
-      if (likesData) {
-        try {
-          return JSON.parse(likesData);
-        } catch (error) {
-          console.error('Ошибка при загрузке лайков:', error);
-          return {};
-        }
-      }
-      return {};
-    }
-    
-    function applyLikesFromStorage() {
-      const likesData = loadLikesFromStorage();
-      comments.forEach((comment, index) => {
-        const commentId = comment.id || index;
-        if (likesData[commentId]) {
-          comment.isLiked = true;
-        } else {
-          comment.isLiked = false;
-        }
-      });
-    }
+    // Лайки работают локально (без сохранения между перезагрузками)
     
     // Функция рендера комментариев
     function renderComments() {
@@ -204,9 +170,6 @@
             // Ставим лайк
             comment.isLiked = true;
           }
-          
-          // Сохраняем состояние лайков в localStorage
-          saveLikesToStorage();
           
           // Перерисовываем все комментарии
           renderComments();
@@ -296,9 +259,6 @@
       try {
         const apiComments = await fetchComments();
         comments = apiComments;
-        
-        // Применяем сохраненные лайки
-        applyLikesFromStorage();
         
         // Перерисовываем комментарии
         renderComments();
