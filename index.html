@@ -37,8 +37,8 @@
     const API_BASE_URL = 'https://wedev-api.sky.pro/api/v1';
     const API_KEY = 'valeriya-kozik'; 
     
-    // Массив с данными комментариев
-    let comments = [];
+    // Массив с данными комментариев (не переназначаем, мутируем)
+    const comments = [];
     
     // Функции для работы с API
     async function fetchComments() {
@@ -258,7 +258,9 @@
     async function loadComments() {
       try {
         const apiComments = await fetchComments();
-        comments = apiComments;
+        // Обновляем содержимое массива без переназначения ссылки
+        comments.length = 0;
+        comments.push(...apiComments);
         
         // Перерисовываем комментарии
         renderComments();
