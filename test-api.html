@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест API</title>
+    <meta charset="utf-8" />
+</head>
+<body>
+    <h1>Тест API комментариев</h1>
+    <button onclick="testAPI()">Тестировать API</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const API_BASE_URL = 'https://wedev-api.sky.pro/api/v1';
+            const API_KEY = 'valeriya-kozik';
+            
+            try {
+                console.log('Тестируем API...');
+                const response = await fetch(`${API_BASE_URL}/${API_KEY}/comments`, {
+                    method: 'GET'
+                });
+                console.log('Статус ответа:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Данные:', data);
+                    document.getElementById('result').innerHTML = 
+                        `<p style="color: green;">✅ API работает! Получено комментариев: ${data.comments ? data.comments.length : 0}</p>`;
+                } else {
+                    const errorText = await response.text();
+                    console.error('Ошибка:', errorText);
+                    document.getElementById('result').innerHTML = 
+                        `<p style="color: red;">❌ Ошибка ${response.status}: ${errorText}</p>`;
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                document.getElementById('result').innerHTML = 
+                    `<p style="color: red;">❌ Ошибка: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
