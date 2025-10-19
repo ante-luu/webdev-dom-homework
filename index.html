@@ -51,6 +51,10 @@
           console.log('Ответ сервера:', response.status, response.statusText);
           
           if (!response.ok) {
+            // Обрабатываем ошибки сервера (500)
+            if (response.status === 500) {
+              throw new Error('Ошибка сервера');
+            }
             return response.text().then(errorText => {
               console.error('Ошибка сервера:', errorText);
               throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
@@ -65,14 +69,23 @@
         })
         .catch(error => {
           console.error('Ошибка при загрузке комментариев:', error);
+          // Обрабатываем ошибки сети
+          if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('Кажется, у вас сломался интернет, попробуйте позже');
+          }
           throw error;
         });
     }
     
-    function postComment(commentData) {
+    function postComment(commentData, forceError = false) {
+      const requestBody = { ...commentData };
+      if (forceError) {
+        requestBody.forceError = true;
+      }
+      
       return fetch(`${API_BASE_URL}/${API_KEY}/comments`, {
         method: 'POST',
-        body: JSON.stringify(commentData),
+        body: JSON.stringify(requestBody),
       })
         .then(response => {
           if (!response.ok) {
@@ -81,6 +94,10 @@
               return response.json().then(errorData => {
                 throw new Error(errorData.error || 'Ошибка валидации');
               });
+            }
+            // Обрабатываем ошибки сервера (500)
+            if (response.status === 500) {
+              throw new Error('Ошибка сервера');
             }
             throw new Error(`HTTP error! status: ${response.status}`);
           }
@@ -92,6 +109,10 @@
         })
         .catch(error => {
           console.error('Ошибка при добавлении комментария:', error);
+          // Обрабатываем ошибки сети
+          if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('Кажется, у вас сломался интернет, попробуйте позже');
+          }
           throw error;
         });
     }
@@ -232,6 +253,20 @@
       });
     }
     
+    // Переменные для сохранения данных формы
+    let formData = { name: '', text: '' };
+    
+    // Функция для автоматического повтора запроса при 500-й ошибке
+    function retryOnServerError(fn, ...args) {
+      return fn(...args).catch((error) => {
+        if (error.message === 'Ошибка сервера') {
+          console.log('Получена 500-я ошибка, повторяем запрос...');
+          return retryOnServerError(fn, ...args);
+        }
+        throw error;
+      });
+    }
+    
     // Функция добавления нового комментария
     function addComment(name, text) {
       if (!name.trim() || !text.trim()) {
@@ -240,15 +275,14 @@
       }
       
       // Валидация длины (минимум 3 символа согласно API)
-      if (name.trim().length < 3) {
-        alert('Имя должно содержать хотя бы 3 символа');
+      if (name.trim().length < 3 || text.trim().length < 3) {
+        alert('Имя и комментарий должны быть не короче 3 символов');
         return;
       }
       
-      if (text.trim().length < 3) {
-        alert('Текст комментария должен содержать хотя бы 3 символа');
-        return;
-      }
+      // Сохраняем данные формы
+      formData.name = name;
+      formData.text = text;
       
       // Показываем состояние загрузки формы
       showCommentFormLoading();
@@ -271,20 +305,30 @@
         name: safeName
       };
       
-      return postComment(commentData)
+      return retryOnServerError(postComment, commentData)
         .then(response => {
           // После успешного добавления перезагружаем комментарии с сервера
           // чтобы получить актуальный список с правильными ID и датами
-          return loadComments();
+          return retryOnServerError(loadComments);
         })
         .then(() => {
+          // Очищаем сохраненные данные формы после успешного добавления
+          formData.name = '';
+          formData.text = '';
           // Восстанавливаем форму
           hideCommentFormLoading();
         })
         .catch(error => {
           console.error('Ошибка при добавлении комментария:', error);
-          alert(error.message || 'Произошла ошибка при добавлении комментария. Попробуйте еще раз.');
-          // Восстанавливаем форму даже при ошибке
+          
+          // Показываем соответствующие сообщения об ошибках
+          if (error.message === 'Кажется, у вас сломался интернет, попробуйте позже') {
+            alert('Кажется, у вас сломался интернет, попробуйте позже');
+          } else {
+            alert(error.message || 'Произошла ошибка при добавлении комментария. Попробуйте еще раз.');
+          }
+          
+          // Восстанавливаем форму с сохраненными данными
           hideCommentFormLoading();
         });
     }
@@ -308,13 +352,14 @@
           type="text"
           class="add-form-name"
           placeholder="Введите ваше имя"
+          value="${formData.name}"
         />
         <textarea
           type="textarea"
           class="add-form-text"
           placeholder="Введите ваш коментарий"
           rows="4"
-        ></textarea>
+        >${formData.text}</textarea>
         <div class="add-form-row">
           <button class="add-form-button">Написать</button>
         </div>
@@ -343,7 +388,7 @@
         showCommentsLoading();
       }
       
-      return fetchComments()
+      return retryOnServerError(fetchComments)
         .then(apiComments => {
           // Обновляем содержимое массива без переназначения ссылки
           comments.length = 0;
@@ -358,8 +403,12 @@
           const commentsList = document.querySelector('.comments');
           let errorMessage = 'Ошибка загрузки комментариев. Проверьте подключение к интернету.';
           
-          // Более детальное сообщение об ошибке
-          if (error.message.includes('CORS')) {
+          // Показываем соответствующие сообщения об ошибках
+          if (error.message === 'Ошибка сервера') {
+            errorMessage = 'Сервер сломался, попробуй позже';
+          } else if (error.message === 'Кажется, у вас сломался интернет, попробуйте позже') {
+            errorMessage = 'Кажется, у вас сломался интернет, попробуйте позже';
+          } else if (error.message.includes('CORS')) {
             errorMessage = 'Ошибка CORS. Откройте файл через локальный сервер (например, Live Server в VS Code).';
           } else if (error.message.includes('404')) {
             errorMessage = 'API ключ не найден. Проверьте правильность personal-key.';
