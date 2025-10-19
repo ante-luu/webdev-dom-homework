@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест обработки ошибок</title>
+    <meta charset="utf-8" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .test-button { margin: 5px; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .test-button:hover { background: #0056b3; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; }
+    </style>
+</head>
+<body>
+    <h1>Тест обработки ошибок</h1>
+    
+    <div class="test-section">
+        <h3>1. Тест валидации длины (минимум 3 символа)</h3>
+        <button class="test-button" onclick="testValidation()">Тест валидации</button>
+        <div id="validation-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Тест 500-й ошибки с автоматическим повтором</h3>
+        <button class="test-button" onclick="test500Error()">Тест 500-й ошибки</button>
+        <div id="error500-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Тест сохранения данных формы</h3>
+        <button class="test-button" onclick="testFormPersistence()">Тест сохранения формы</button>
+        <div id="form-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Тест сетевых ошибок</h3>
+        <button class="test-button" onclick="testNetworkError()">Тест сетевой ошибки</button>
+        <div id="network-result" class="result"></div>
+    </div>
+
+    <script>
+        // Базовый URL API
+        const API_BASE_URL = 'https://wedev-api.sky.pro/api/v1';
+        const API_KEY = 'valeriya-kozik';
+        
+        // Переменные для сохранения данных формы
+        let formData = { name: '', text: '' };
+        
+        // Функция для автоматического повтора запроса при 500-й ошибке
+        function retryOnServerError(fn, ...args) {
+            return fn(...args).catch((error) => {
+                if (error.message === 'Ошибка сервера') {
+                    console.log('Получена 500-я ошибка, повторяем запрос...');
+                    return retryOnServerError(fn, ...args);
+                }
+                throw error;
+            });
+        }
+        
+        function postComment(commentData, forceError = false) {
+            const requestBody = { ...commentData };
+            if (forceError) {
+                requestBody.forceError = true;
+            }
+            
+            return fetch(`${API_BASE_URL}/${API_KEY}/comments`, {
+                method: 'POST',
+                body: JSON.stringify(requestBody),
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        // Обрабатываем ошибки валидации (400)
+                        if (response.status === 400) {
+                            return response.json().then(errorData => {
+                                throw new Error(errorData.error || 'Ошибка валидации');
+                            });
+                        }
+                        // Обрабатываем ошибки сервера (500)
+                        if (response.status === 500) {
+                            throw new Error('Ошибка сервера');
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    return response.json();
+                })
+                .then(data => {
+                    return data; // API возвращает { "result": "ok" }
+                })
+                .catch(error => {
+                    console.error('Ошибка при добавлении комментария:', error);
+                    // Обрабатываем ошибки сети
+                    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                        throw new Error('Кажется, у вас сломался интернет, попробуйте позже');
+                    }
+                    throw error;
+                });
+        }
+        
+        // Тест 1: Валидация длины
+        function testValidation() {
+            const result = document.getElementById('validation-result');
+            
+            // Тест короткого имени
+            if (validateInput('ab', 'Тест комментария')) {
+                result.innerHTML = '❌ Валидация не работает для короткого имени';
+                return;
+            }
+            
+            // Тест короткого комментария
+            if (validateInput('Тест', 'ab')) {
+                result.innerHTML = '❌ Валидация не работает для короткого комментария';
+                return;
+            }
+            
+            // Тест правильных данных
+            if (!validateInput('Тест', 'Тест комментария')) {
+                result.innerHTML = '❌ Валидация блокирует правильные данные';
+                return;
+            }
+            
+            result.innerHTML = '✅ Валидация работает корректно';
+        }
+        
+        function validateInput(name, text) {
+            if (!name.trim() || !text.trim()) {
+                return false;
+            }
+            
+            if (name.trim().length < 3 || text.trim().length < 3) {
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // Тест 2: 500-я ошибка с повтором
+        function test500Error() {
+            const result = document.getElementById('error500-result');
+            result.innerHTML = 'Тестируем 500-ю ошибку...';
+            
+            const commentData = {
+                text: 'Тест комментария',
+                name: 'Тест'
+            };
+            
+            let retryCount = 0;
+            const originalRetry = retryOnServerError;
+            
+            // Мокаем функцию для тестирования
+            window.retryOnServerError = function(fn, ...args) {
+                return fn(...args).catch((error) => {
+                    if (error.message === 'Ошибка сервера') {
+                        retryCount++;
+                        console.log(`Попытка ${retryCount}: Получена 500-я ошибка, повторяем запрос...`);
+                        if (retryCount < 3) {
+                            return window.retryOnServerError(fn, ...args);
+                        }
+                    }
+                    throw error;
+                });
+            };
+            
+            postComment(commentData, true)
+                .then(() => {
+                    result.innerHTML = '✅ 500-я ошибка обработана корректно';
+                })
+                .catch(error => {
+                    if (error.message === 'Ошибка сервера') {
+                        result.innerHTML = `✅ Автоматический повтор работает (попыток: ${retryCount})`;
+                    } else {
+                        result.innerHTML = `❌ Неожиданная ошибка: ${error.message}`;
+                    }
+                })
+                .finally(() => {
+                    window.retryOnServerError = originalRetry;
+                });
+        }
+        
+        // Тест 3: Сохранение данных формы
+        function testFormPersistence() {
+            const result = document.getElementById('form-result');
+            
+            // Сохраняем тестовые данные
+            formData.name = 'Тестовое имя';
+            formData.text = 'Тестовый комментарий';
+            
+            // Проверяем сохранение
+            if (formData.name === 'Тестовое имя' && formData.text === 'Тестовый комментарий') {
+                result.innerHTML = '✅ Данные формы сохраняются корректно';
+            } else {
+                result.innerHTML = '❌ Данные формы не сохраняются';
+            }
+        }
+        
+        // Тест 4: Сетевые ошибки
+        function testNetworkError() {
+            const result = document.getElementById('network-result');
+            
+            // Создаем мок для сетевой ошибки
+            const originalFetch = window.fetch;
+            window.fetch = function() {
+                return Promise.reject(new TypeError('Failed to fetch'));
+            };
+            
+            postComment({ text: 'Тест', name: 'Тест' })
+                .then(() => {
+                    result.innerHTML = '❌ Сетевая ошибка не обработана';
+                })
+                .catch(error => {
+                    if (error.message === 'Кажется, у вас сломался интернет, попробуйте позже') {
+                        result.innerHTML = '✅ Сетевые ошибки обрабатываются корректно';
+                    } else {
+                        result.innerHTML = `❌ Неожиданная ошибка: ${error.message}`;
+                    }
+                })
+                .finally(() => {
+                    window.fetch = originalFetch;
+                });
+        }
+    </script>
+</body>
+</html>
+

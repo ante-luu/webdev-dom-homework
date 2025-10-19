@@ -1,0 +1,18 @@
+{
+  "name": "comments-app",
+  "version": "1.0.0",
+  "description": "Модульная версия приложения комментариев",
+  "main": "js/main.js",
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix ."
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0"
+  }
+}
