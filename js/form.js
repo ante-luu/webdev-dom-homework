@@ -7,6 +7,7 @@ import { sanitize } from './sanitize.js';
 import { retryOnServerError, postComment, fetchComments } from './api.js';
 import { updateComments, comments } from './comments.js';
 import { renderComments } from './render.js';
+import { isAuthorized, getUser } from './auth.js';
 
 // Переменные для сохранения данных формы
 let formData = { name: '', text: '' };
@@ -24,12 +25,24 @@ export function showCommentFormLoading() {
  */
 export function hideCommentFormLoading() {
   const addForm = document.querySelector('.add-form');
+  if (!isAuthorized()) {
+    addForm.innerHTML = `<div class="auth-hint">Чтобы добавить комментарий, <a class="login-link" href="#">авторизуйтесь</a>.</div>`;
+    // Обработчик на случай, если вызывается напрямую вне renderFormOrAuth
+    import('./views/login.js').then(({ showLoginForm }) => {
+      const link = addForm.querySelector('.login-link');
+      if (link) link.addEventListener('click', (e) => { e.preventDefault(); showLoginForm(); });
+    });
+    return;
+  }
+
+  const user = getUser();
   addForm.innerHTML = `
     <input
       type="text"
       class="add-form-name"
       placeholder="Введите ваше имя"
-      value="${formData.name}"
+      value="${user?.name || formData.name}"
+      readonly
     />
     <textarea
       type="textarea"

@@ -4,6 +4,8 @@
  */
 
 import { comments } from './comments.js';
+import { isAuthorized, getUser, clearAuth } from './auth.js';
+import { showLoginForm } from './views/login.js';
 
 /**
  * Форматирует дату для отображения
@@ -72,6 +74,9 @@ export function renderComments() {
     
     commentsList.appendChild(commentElement);
   });
+
+  // Рендер панели формы/авторизации под списком
+  renderFormOrAuth();
 }
 
 /**
@@ -80,4 +85,46 @@ export function renderComments() {
 export function showCommentsLoading() {
   const commentsList = document.querySelector('.comments');
   commentsList.innerHTML = '<li class="comment"><div class="comment-text">Загрузка комментариев...</div></li>';
+}
+
+/**
+ * Рендерит форму или ссылку на авторизацию
+ */
+export function renderFormOrAuth() {
+  const container = document.querySelector('.add-form');
+  if (!container) return;
+
+  if (!isAuthorized()) {
+    container.innerHTML = `
+      <div class="auth-hint">
+        Чтобы добавить комментарий, <a class="login-link" href="#">авторизуйтесь</a>.
+      </div>
+    `;
+    const loginLink = container.querySelector('.login-link');
+    if (loginLink) {
+      loginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        showLoginForm();
+      });
+    }
+    return;
+  }
+
+  const user = getUser();
+  container.innerHTML = `
+    <input type="text" class="add-form-name" placeholder="Ваше имя" value="${user?.name || ''}" readonly />
+    <textarea type="textarea" class="add-form-text" placeholder="Введите ваш коментарий" rows="4"></textarea>
+    <div class="add-form-row">
+      <button class="add-form-button">Написать</button>
+      <button class="logout-button" style="margin-left: 8px;">Выйти</button>
+    </div>
+  `;
+
+  const logoutBtn = container.querySelector('.logout-button');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      clearAuth();
+      renderFormOrAuth();
+    });
+  }
 }
